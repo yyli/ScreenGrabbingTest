@@ -5,7 +5,9 @@ import logging
 import numpy as np
 import cv2
 
-LOGGER = logging.getLogger('screen_capture')
+from logger import initLogger
+
+LOGGER = initLogger('ScreenCapture')
 
 # Function constants
 EnumWindows = ctypes.windll.user32.EnumWindows
@@ -52,23 +54,8 @@ class BITMAPINFO(ctypes.Structure):
     _fields_ = [('bmiHeader', BITMAPINFOHEADER),
                 ('bmiColors', DWORD * 3)]
 
-def init_logger():
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch = logging.StreamHandler()
-    ch.setFormatter(formatter)
-
-    fh = logging.FileHandler('spam.log')
-    fh.setFormatter(formatter)
-
-    # LOGGER.addHandler(fh)
-    LOGGER.addHandler(ch)
-    LOGGER.setLevel(logging.INFO)
-
-    LOGGER.info("Log started.")
-
 class ScreenCapture(object):
     def __init__(self, name):
-        init_logger()
         self.hwnd = self.__get_window_handle(name)
         if self.hwnd is None:
             raise Exception("Can't get window")

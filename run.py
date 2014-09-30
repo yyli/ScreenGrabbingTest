@@ -11,28 +11,15 @@ from multiprocessing import Process, Manager, Lock
 from threading import Timer
 from collections import deque
 
-
+from logger import initLogger
 from ScreenCapture import ScreenCapture
 
-LOGGER = logging.getLogger()
-
-def init_logger():
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch = logging.StreamHandler()
-    ch.setFormatter(formatter)
-
-    fh = logging.FileHandler('spam.log')
-    fh.setFormatter(formatter)
-
-    # LOGGER.addHandler(fh)
-    LOGGER.addHandler(ch)
-    LOGGER.setLevel(logging.INFO)
-
-    LOGGER.info("Log started.")
+LOGGER = initLogger('GUI')
 
 class ShowImages(wx.Panel):
     def __init__(self, parent, dproxy, dproxy_lock, p, fps=60):
         wx.Panel.__init__(self, parent)
+        parent.Bind(wx.EVT_CLOSE, self.OnClose)
         self.SetDoubleBuffered(True)
 
         self.fps_timer = 0
@@ -47,7 +34,7 @@ class ShowImages(wx.Panel):
         self.parent = parent
         self.p = p
 
-        print("started")
+        LOGGER.info("Started")
         img = None
         while img is None:
             with dproxy_lock:
@@ -59,15 +46,17 @@ class ShowImages(wx.Panel):
         self.bmp = wx.BitmapFromBuffer(self.width, self.height, img)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_CLOSE, self._when_closed)
        
-        t = Timer(1/fps, self.update_loop)
-        t.start()
+        self.t = Timer(1/fps, self.update_loop)
+        self.t.start()
 
-    def _when_closed(self, event):
-        print("p termianted")
-        self.p.terminate()
-        self.Close()
+    def OnClose(self, event):
+        self.t.cancel()
+        with self.dproxy_lock:
+            self.dproxy['stop'] = True
+            self.p.terminate()
+            LOGGER.info("p termianted")
+            self.parent.Destroy()
 
     def OnPaint(self, evt):
         dc = wx.BufferedPaintDC(self)
@@ -75,6 +64,7 @@ class ShowImages(wx.Panel):
 
     def update_loop(self):
         loop_time = timeit.default_timer()
+        LOGGER.debug("loop_time started")
         with self.dproxy_lock:
             img = self.dproxy['frame']
             if img is not None:
@@ -103,8 +93,8 @@ class ShowImages(wx.Panel):
             self.Refresh()
 
         time_taken = timeit.default_timer() - loop_time
-        t = Timer(1/self.fps - time_taken - 1/1750, self.update_loop)
-        t.start()
+        self.t = Timer(1/self.fps - time_taken - 1/1750, self.update_loop)
+        self.t.start()
 
 def update_image_loop(dproxy, dproxy_lock):
     sc = ScreenCapture("Untitled - Notepad")
@@ -112,23 +102,16 @@ def update_image_loop(dproxy, dproxy_lock):
     while True:
         frame = sc.get_frame()
         with dproxy_lock:
+            if dproxy['stop']:
+                LOGGER.debug("stop signal recieved")
+                break;
             dproxy['frame'] = frame
 
 if __name__ == "__main__":
-    init_logger()
-
-    # while True:
-    #     img = get_frame(hwnd)
-    #     cv2.imshow('image', img)
-    #     print("hi")
-    #     k = cv2.waitKey(5)
-    #     if k == 27:
-    #         cv2.destroyAllWindows()
-    #         break
-
     # initate getting image loop
     dproxy = Manager().dict()
     dproxy['frame'] = None
+    dproxy['stop'] = False
     dproxy_lock = Lock()
     p = Process(target=update_image_loop, args=(dproxy, dproxy_lock))
     p.start()
@@ -138,5 +121,4 @@ if __name__ == "__main__":
     cap = ShowImages(frame, dproxy, dproxy_lock, p)
     frame.Show()
     app.MainLoop()
-    p.terminate()
-    print("p termianted")
+    LOGGER.info("MainLoop ended")
