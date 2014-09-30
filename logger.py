@@ -5,7 +5,7 @@ def initLogger(name):
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
 
     fh = logging.FileHandler('last.log', mode='w')
     fh.setFormatter(formatter)

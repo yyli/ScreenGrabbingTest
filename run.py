@@ -16,10 +16,9 @@ from ScreenCapture import ScreenCapture
 
 LOGGER = initLogger('GUI')
 
-class ShowImages(wx.Panel):
-    def __init__(self, parent, dproxy, dproxy_lock, p, fps=60):
+class ImagePanel(wx.Panel):
+    def __init__(self, parent, dproxy, dproxy_lock, fps=60):
         wx.Panel.__init__(self, parent)
-        parent.Bind(wx.EVT_CLOSE, self.OnClose)
         self.SetDoubleBuffered(True)
 
         self.fps_timer = 0
@@ -32,9 +31,8 @@ class ShowImages(wx.Panel):
         self.fps_label = wx.StaticText(self, label="FPS: 0", pos=(1, 0))
 
         self.parent = parent
-        self.p = p
 
-        LOGGER.info("Started")
+        LOGGER.info("ImagePanel Started")
         img = None
         while img is None:
             with dproxy_lock:
@@ -46,17 +44,21 @@ class ShowImages(wx.Panel):
         self.bmp = wx.BitmapFromBuffer(self.width, self.height, img)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
        
         self.t = Timer(1/fps, self.update_loop)
         self.t.start()
 
     def OnClose(self, event):
-        self.t.cancel()
         with self.dproxy_lock:
             self.dproxy['stop'] = True
             self.p.terminate()
             LOGGER.info("p termianted")
             self.parent.Destroy()
+
+    def OnDestroy(self, event):
+        self.t.cancel()
+        LOGGER.debug("Panel Destroyed")
 
     def OnPaint(self, evt):
         dc = wx.BufferedPaintDC(self)
@@ -96,6 +98,29 @@ class ShowImages(wx.Panel):
         self.t = Timer(1/self.fps - time_taken - 1/1750, self.update_loop)
         self.t.start()
 
+
+class Frame(wx.Frame):
+    def __init__(self, title):
+        wx.Frame.__init__(self, None, title=title)
+
+        self.dproxy = Manager().dict()
+        self.dproxy['frame'] = None
+        self.dproxy['stop'] = False
+        self.dproxy_lock = Lock()
+        self.p = Process(target=update_image_loop, args=(self.dproxy, self.dproxy_lock))
+        self.p.start()
+
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.image_panel = ImagePanel(self, self.dproxy, self.dproxy_lock)
+
+    def OnClose(self, event):
+        with self.dproxy_lock:
+            self.dproxy['stop'] = True
+            self.p.terminate()
+            LOGGER.info("p termianted")
+            self.image_panel.Destroy()
+            self.Destroy()
+
 def update_image_loop(dproxy, dproxy_lock):
     sc = ScreenCapture("Untitled - Notepad")
 
@@ -109,16 +134,9 @@ def update_image_loop(dproxy, dproxy_lock):
 
 if __name__ == "__main__":
     # initate getting image loop
-    dproxy = Manager().dict()
-    dproxy['frame'] = None
-    dproxy['stop'] = False
-    dproxy_lock = Lock()
-    p = Process(target=update_image_loop, args=(dproxy, dproxy_lock))
-    p.start()
-
     app = wx.App()
-    frame = wx.Frame(None, -1, "Screen Replicator")
-    cap = ShowImages(frame, dproxy, dproxy_lock, p)
+    frame = Frame("Screen Replicator")
+    # cap = ShowImages(frame, dproxy, dproxy_lock, p)
     frame.Show()
     app.MainLoop()
     LOGGER.info("MainLoop ended")
