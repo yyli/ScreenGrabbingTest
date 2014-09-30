@@ -113,20 +113,30 @@ class ScreenCapture(object):
             w = width
             h = height
 
+        remainder = w % 8
+        if remainder:
+            w -= remainder
+            if w < 0:
+                w = 0
+
         HBmp = CreateCompatibleBitmap(DCsrc, w, h)
         SelectObject(DC, HBmp)
         retval = StretchBlt(DC, 0, 0, w, h, DCsrc, x, y, w, h, SRCCOPY)
+
+        LOGGER.debug("StretchBlt: {0}".format(retval))
 
         bih = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), w, -h, 1, 24, BI_RGB, 0, 0, 0, 0, 0)
         bi = BITMAPINFO(bih)
 
         buf = np.zeros([h, w, 3], dtype=np.uint8)
         bits = GetDIBits(DC, HBmp, 0, h, buf.ctypes.data_as(ctypes.POINTER(ctypes.c_char)), ctypes.pointer(bi), 0)
+
+        LOGGER.debug("Bits: {0} Height: {1}".format(bits, h))
+
         DeleteDC(DC)
         ReleaseDC(self.hwnd, DCsrc)
         DeleteObject(HBmp)
 
-        LOGGER.debug("Bits: {0} Height: {1}".format(bits, h))
         if bits != h:
             return None
 
