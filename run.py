@@ -8,7 +8,7 @@ import sys
 import time
 import timeit
 import ctypes
-from multiprocessing import Process, Manager, Lock
+from multiprocessing import Process, Manager, Lock, Queue
 from threading import Timer
 from collections import deque
 
@@ -93,6 +93,29 @@ class ImagePanel(wx.Panel):
         self.t = Timer(1/self.fps - time_taken - 1/1750, self.update_loop)
         self.t.start()
 
+class WindowSelectorDialog(wx.Dialog):
+    def __init__(self, parent):
+        wx.Dialog.__init__(self, parent, -1, "Window Selector", size=(350,300))
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        stline = wx.StaticText(self, 11, 'placeholder')
+        vbox.Add(stline, 1, wx.ALIGN_CENTER|wx.TOP, 45)
+
+        button_box = wx.BoxSizer(wx.HORIZONTAL)
+        okay_button = wx.Button(self, label='Okay')
+        quit_button = wx.Button(self, label='Quit')
+        button_box.Add(okay_button)
+        button_box.Add(quit_button)
+        
+        vbox.Add(button_box, 0, wx.CENTER)
+
+        self.SetSizer(vbox)
+
+        self.Bind(wx.EVT_BUTTON, self.OnClose, okay_button)
+
+    def OnClose(self, event):
+        print("close")
+        self.Close()
 
 class Frame(wx.Frame):
     def __init__(self, title):
@@ -106,6 +129,13 @@ class Frame(wx.Frame):
         self.p.start()
 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+
+        windows_dialog = WindowSelectorDialog(self);
+
+        print(windows_dialog.ShowModal())
+
+        windows_dialog.Destroy()
+
         self.image_panel = ImagePanel(self, self.dproxy, self.dproxy_lock)
 
     def OnClose(self, event):
