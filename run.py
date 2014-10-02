@@ -4,6 +4,7 @@ from __future__ import division
 import logging
 import numpy as np
 import wx
+import sys
 import time
 import timeit
 import ctypes
@@ -44,21 +45,15 @@ class ImagePanel(wx.Panel):
         self.bmp = wx.BitmapFromBuffer(self.width, self.height, img)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
        
         self.t = Timer(1/fps, self.update_loop)
         self.t.start()
 
-    def OnClose(self, event):
+    def Destroy(self):
         with self.dproxy_lock:
-            self.dproxy['stop'] = True
-            self.p.terminate()
-            LOGGER.info("p termianted")
-            self.parent.Destroy()
-
-    def OnDestroy(self, event):
-        self.t.cancel()
-        LOGGER.debug("Panel Destroyed")
+            self.t.cancel()
+        LOGGER.info("Panel Destroyed")
+        super(ImagePanel, self).Destroy()
 
     def OnPaint(self, evt):
         dc = wx.BufferedPaintDC(self)
@@ -118,19 +113,22 @@ class Frame(wx.Frame):
             self.dproxy['stop'] = True
             self.p.terminate()
             LOGGER.info("p termianted")
-            self.image_panel.Destroy()
-            self.Destroy()
+        
+        self.image_panel.Destroy()
+        self.Destroy()
 
 def update_image_loop(dproxy, dproxy_lock):
-    sc = ScreenCapture("Untitled - Notepad")
-
-    while True:
-        frame = sc.get_frame()
-        with dproxy_lock:
-            if dproxy['stop']:
-                LOGGER.debug("stop signal recieved")
-                break;
-            dproxy['frame'] = frame
+    try:
+        sc = ScreenCapture("Task Manager")
+        while True:
+            frame = sc.get_frame()
+            with dproxy_lock:
+                if dproxy['stop']:
+                    LOGGER.debug("stop signal recieved")
+                    break;
+                dproxy['frame'] = frame
+    except RuntimeError:
+        pass
 
 if __name__ == "__main__":
     # initate getting image loop

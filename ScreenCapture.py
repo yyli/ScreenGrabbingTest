@@ -58,7 +58,7 @@ class ScreenCapture(object):
     def __init__(self, name):
         self.hwnd = self.__get_window_handle(name)
         if self.hwnd is None:
-            raise Exception("Can't get window")
+            raise RuntimeError("Can't get window")
 
     def __get_window_handle(self, name):
         wanted_hwnd = []
