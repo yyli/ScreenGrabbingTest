@@ -80,7 +80,7 @@ class ScreenCapture(object):
                 length = GetWindowTextLength(hwnd)
                 buff = ctypes.create_unicode_buffer(length + 1)
                 GetWindowText(hwnd, buff, length + 1)
-                if buff.value == name:
+                if buff.value.startswith(name):
                     wanted_hwnd.append(hwnd)
                     LOGGER.debug("name: {0}, {1}, {2}".format(name, hwnd, wanted_hwnd))
                     return False

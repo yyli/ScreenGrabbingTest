@@ -109,46 +109,62 @@ class WindowSelectorDialog(wx.Dialog):
         vbox.Add(self.selector, 0, wx.ALIGN_CENTER|wx.TOP)
 
         button_box = wx.BoxSizer(wx.HORIZONTAL)
-        okay_button = wx.Button(self, label='Okay')
-        quit_button = wx.Button(self, label='Quit')
-        button_box.Add(okay_button)
-        button_box.Add(quit_button)
+        self.okay_button = wx.Button(self, label='Okay')
+        self.quit_button = wx.Button(self, label='Quit')
+        button_box.Add(self.okay_button)
+        button_box.Add(self.quit_button)
         
         vbox.Add(button_box, 0, wx.ALIGN_CENTER)
 
         self.SetSizerAndFit(vbox)
 
-        self.Bind(wx.EVT_BUTTON, self.OnClose, okay_button)
-        self.Bind(wx.EVT_BUTTON, self.OnClose, quit_button)
+        self.Bind(wx.EVT_BUTTON, self.CloseOkay, self.okay_button)
+        self.Bind(wx.EVT_BUTTON, self.CloseQuit, self.quit_button)
 
         self.selected_window = None
+        self.quit = True
     
+    def CloseQuit(self, event):
+        self.quit = True
+        self.OnClose(event)
+
+    def CloseOkay(self, event):
+        self.quit = False
+        self.OnClose(event)
+
     def OnClose(self, event):
         value = self.selector.GetValue()
         if value != "":
             self.selected_window = value
+
         self.Close()
 
     def getValue(self):
         return self.selected_window
 
+    def doQuit(self):
+        return self.quit
+
 class Frame(wx.Frame):
     def __init__(self, title):
         wx.Frame.__init__(self, None, title=title)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-        windows_dialog = WindowSelectorDialog(self);
-
-        windows_dialog.ShowModal()
-        selected_window = windows_dialog.getValue()
-
-        windows_dialog.Destroy()
 
         self.dproxy = Manager().dict()
         self.dproxy['frame'] = None
         self.dproxy['stop'] = False
         self.dproxy_lock = Lock()
         self.p = None
+
+        windows_dialog = WindowSelectorDialog(self);
+
+        windows_dialog.ShowModal()
+        selected_window = windows_dialog.getValue()
+
+        if windows_dialog.doQuit():
+            self.OnClose(None)
+            return
+
+        windows_dialog.Destroy()
 
         if selected_window is not None:
             self.p = Process(target=update_image_loop, args=(selected_window, self.dproxy, self.dproxy_lock))
@@ -158,14 +174,16 @@ class Frame(wx.Frame):
         else:
             self.OnClose(None)
 
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+
     def OnClose(self, event):
         with self.dproxy_lock:
             self.dproxy['stop'] = True
+            if self.p is not None:
+                self.p.terminate()
+                LOGGER.info("p termianted")
 
         if self.p is not None:
-            self.p.terminate()
-            LOGGER.info("p termianted")
-
             self.image_panel.Destroy()
 
         self.Destroy()
