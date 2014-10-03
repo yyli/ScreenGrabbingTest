@@ -54,6 +54,19 @@ class BITMAPINFO(ctypes.Structure):
     _fields_ = [('bmiHeader', BITMAPINFOHEADER),
                 ('bmiColors', DWORD * 3)]
 
+def get_all_window_names():
+    windows = []
+    def foreach_window(hwnd, lParam):
+        if IsWindowVisible(hwnd):
+            length = GetWindowTextLength(hwnd)
+            buff = ctypes.create_unicode_buffer(length + 1)
+            GetWindowText(hwnd, buff, length + 1)
+            windows.append(buff.value)
+        return True
+
+    EnumWindows(EnumWindowsProc(foreach_window), 0)
+    return windows
+
 class ScreenCapture(object):
     def __init__(self, name):
         self.hwnd = self.__get_window_handle(name)

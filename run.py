@@ -13,7 +13,7 @@ from threading import Timer
 from collections import deque
 
 from logger import initLogger
-from ScreenCapture import ScreenCapture
+from ScreenCapture import ScreenCapture, get_all_window_names
 
 LOGGER = initLogger('GUI')
 
@@ -95,11 +95,18 @@ class ImagePanel(wx.Panel):
 
 class WindowSelectorDialog(wx.Dialog):
     def __init__(self, parent):
-        wx.Dialog.__init__(self, parent, -1, "Window Selector", size=(350,300))
+        wx.Dialog.__init__(self, parent, -1, "Window Selector")
 
         vbox = wx.BoxSizer(wx.VERTICAL)
-        stline = wx.StaticText(self, 11, 'placeholder')
-        vbox.Add(stline, 1, wx.ALIGN_CENTER|wx.TOP, 45)
+        stline = wx.StaticText(self, label='Select Window Name:')
+
+        windows_list = get_all_window_names()
+        windows_list = filter(None, windows_list)
+        windows_list = [x[:50] for x in windows_list]
+        self.selector = wx.ComboBox(self, choices=windows_list, style=wx.CB_READONLY)
+
+        vbox.Add(stline, 0, wx.ALIGN_CENTER|wx.TOP)
+        vbox.Add(self.selector, 0, wx.ALIGN_CENTER|wx.TOP)
 
         button_box = wx.BoxSizer(wx.HORIZONTAL)
         okay_button = wx.Button(self, label='Okay')
@@ -107,49 +114,65 @@ class WindowSelectorDialog(wx.Dialog):
         button_box.Add(okay_button)
         button_box.Add(quit_button)
         
-        vbox.Add(button_box, 0, wx.CENTER)
+        vbox.Add(button_box, 0, wx.ALIGN_CENTER)
 
-        self.SetSizer(vbox)
+        self.SetSizerAndFit(vbox)
 
         self.Bind(wx.EVT_BUTTON, self.OnClose, okay_button)
+        self.Bind(wx.EVT_BUTTON, self.OnClose, quit_button)
 
+        self.selected_window = None
+    
     def OnClose(self, event):
-        print("close")
+        value = self.selector.GetValue()
+        if value != "":
+            self.selected_window = value
         self.Close()
+
+    def getValue(self):
+        return self.selected_window
 
 class Frame(wx.Frame):
     def __init__(self, title):
         wx.Frame.__init__(self, None, title=title)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+
+        windows_dialog = WindowSelectorDialog(self);
+
+        windows_dialog.ShowModal()
+        selected_window = windows_dialog.getValue()
+
+        windows_dialog.Destroy()
 
         self.dproxy = Manager().dict()
         self.dproxy['frame'] = None
         self.dproxy['stop'] = False
         self.dproxy_lock = Lock()
-        self.p = Process(target=update_image_loop, args=(self.dproxy, self.dproxy_lock))
-        self.p.start()
+        self.p = None
 
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        if selected_window is not None:
+            self.p = Process(target=update_image_loop, args=(selected_window, self.dproxy, self.dproxy_lock))
+            self.p.start()
 
-        windows_dialog = WindowSelectorDialog(self);
-
-        print(windows_dialog.ShowModal())
-
-        windows_dialog.Destroy()
-
-        self.image_panel = ImagePanel(self, self.dproxy, self.dproxy_lock)
+            self.image_panel = ImagePanel(self, self.dproxy, self.dproxy_lock)
+        else:
+            self.OnClose(None)
 
     def OnClose(self, event):
         with self.dproxy_lock:
             self.dproxy['stop'] = True
+
+        if self.p is not None:
             self.p.terminate()
             LOGGER.info("p termianted")
-        
-        self.image_panel.Destroy()
+
+            self.image_panel.Destroy()
+
         self.Destroy()
 
-def update_image_loop(dproxy, dproxy_lock):
+def update_image_loop(name, dproxy, dproxy_lock):
     try:
-        sc = ScreenCapture("Task Manager")
+        sc = ScreenCapture(name)
         while True:
             frame = sc.get_frame()
             with dproxy_lock:
@@ -158,7 +181,8 @@ def update_image_loop(dproxy, dproxy_lock):
                     break;
                 dproxy['frame'] = frame
     except RuntimeError:
-        pass
+        # need to handle this
+        print("error")
 
 if __name__ == "__main__":
     # initate getting image loop
